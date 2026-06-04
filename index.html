@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="听写">
+<meta name="theme-color" content="#1a1a2e">
+<link rel="manifest" href="manifest.json">
+<title>四下听写练习</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --card: #16213e;
+    --accent: #e8b84b;
+    --accent2: #f0c060;
+    --text: #f0f0f5;
+    --muted: rgba(240,240,245,0.45);
+    --sub: rgba(240,240,245,0.25);
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%; width: 100%; overflow: hidden;
+    font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* ── screen system ── */
+  .screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    padding-top: calc(var(--safe-top) + 16px);
+    padding-bottom: calc(var(--safe-bot) + 16px);
+    padding-left: 20px; padding-right: 20px;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    opacity: 1; transform: translateX(0);
+    will-change: transform, opacity;
+  }
+  .screen.hidden { opacity: 0; pointer-events: none; transform: translateX(30px); }
+  .screen.hidden-left { opacity: 0; pointer-events: none; transform: translateX(-30px); }
+
+  /* ── HOME ── */
+  #homeScreen { overflow: hidden; }
+  .app-header {
+    text-align: center;
+    padding: 20px 0 24px;
+    flex-shrink: 0;
+  }
+  .app-header .badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #1a1a2e;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+  .app-header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 2px;
+  }
+  .app-header p {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  .lesson-list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 8px;
+  }
+  .lesson-list::-webkit-scrollbar { display: none; }
+  .lesson-item {
+    display: flex; align-items: center;
+    background: var(--card);
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    border: 1px solid rgba(255,255,255,0.06);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .lesson-item:active { background: #1e2d50; transform: scale(0.98); }
+  .lesson-num {
+    width: 36px; height: 36px;
+    background: rgba(232,184,75,0.15);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+    color: var(--accent);
+    flex-shrink: 0;
+    margin-right: 14px;
+  }
+  .lesson-info { flex: 1; }
+  .lesson-name { font-size: 16px; font-weight: 500; color: var(--text); }
+  .lesson-count { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .lesson-arrow { color: var(--sub); font-size: 18px; }
+  .yuandi-item { border-color: rgba(94,201,138,0.15); }
+
+  /* ── DICTATION ── */
+  #dictScreen {
+    justify-content: space-between;
+    text-align: center;
+  }
+  .dict-top {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0; padding-bottom: 16px;
+  }
+  .back-btn-icon {
+    width: 40px; height: 40px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 12px;
+    border: none; cursor: pointer;
+    color: var(--text); font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .dict-lesson-name {
+    font-size: 14px; color: var(--muted); font-weight: 500;
+  }
+  .dict-placeholder { width: 40px; }
+
+  /* progress dots */
+  .progress-wrap {
+    flex-shrink: 0;
+    padding: 0 0 20px;
+  }
+  .progress-track {
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  #progressFill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+  #wordCountText {
+    font-size: 12px; color: var(--sub); text-align: center;
+  }
+
+  /* pinyin center */
+  .dict-center {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 20px 0;
+  }
+  #pinyinDisplay {
+    font-size: 46px;
+    font-weight: 300;
+    color: var(--text);
+    letter-spacing: 6px;
+    line-height: 1.4;
+    text-align: center;
+    transition: opacity 0.2s;
+  }
+  #hintLabel {
+    margin-top: 18px;
+    font-size: 13px;
+    color: var(--sub);
+  }
+
+  /* circular timer */
+  .timer-wrap {
+    flex-shrink: 0;
+    display: flex; justify-content: center;
+    padding: 10px 0 24px;
+  }
+  #timerSvg { transform: rotate(-90deg); }
+  #timerTrack { stroke: rgba(255,255,255,0.1); }
+  #timerArc {
+    stroke: var(--accent);
+    stroke-dasharray: 188.5;
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 0.1s linear;
+  }
+  .timer-text {
+    position: absolute;
+    font-size: 18px; font-weight: 600;
+    color: var(--accent);
+  }
+  .timer-box {
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    width: 72px; height: 72px;
+  }
+
+  /* bottom buttons */
+  .dict-bottom { flex-shrink: 0; }
+  .nav-row {
+    display: grid; grid-template-columns: 1fr 2fr 1fr;
+    gap: 10px;
+  }
+  .nav-btn {
+    height: 54px;
+    border: none; border-radius: 16px;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    transition: opacity 0.15s, transform 0.1s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-btn:active { transform: scale(0.96); }
+  .nav-btn:disabled { opacity: 0.25; }
+  #prevBtn { background: rgba(255,255,255,0.1); color: var(--text); }
+  #nextBtn { background: var(--accent); color: #1a1a2e; font-size: 16px; }
+  #skipEndBtn {
+    background: rgba(255,255,255,0.06);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 400;
+    border-radius: 16px;
+    border: none; cursor: pointer; font-family: inherit;
+    transition: opacity 0.15s;
+    height: 54px;
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; margin-top: 10px;
+  }
+
+  /* ── END SCREEN ── */
+  #endScreen { overflow: hidden; }
+  .end-header { flex-shrink: 0; text-align: center; padding: 20px 0 22px; }
+  .end-icon {
+    width: 64px; height: 64px;
+    background: rgba(232,184,75,0.15);
+    border-radius: 50%;
+    margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+  }
+  .end-header h2 { font-size: 22px; font-weight: 700; color: var(--text); }
+  .end-header p { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .word-grid {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    align-content: start;
+    padding-bottom: 12px;
+  }
+  .word-grid::-webkit-scrollbar { display: none; }
+  .word-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 10px 6px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .pinyin-small {
+    font-size: 9px;
+    color: var(--sub);
+    margin-bottom: 5px;
+    letter-spacing: 0.3px;
+    line-height: 1.5;
+    word-break: break-all;
+  }
+  .char { font-size: 19px; color: var(--text); font-weight: 500; }
+  .end-actions { flex-shrink: 0; padding-top: 14px; }
+  .end-btn {
+    display: block; width: 100%;
+    height: 52px; border: none;
+    border-radius: 16px; font-size: 16px;
+    font-family: inherit; cursor: pointer;
+    font-weight: 600;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .end-btn:active { transform: scale(0.98); }
+  #restartBtn { background: var(--accent); color: #1a1a2e; margin-bottom: 10px; }
+  #backBtn2 { background: rgba(255,255,255,0.08); color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<div class="screen" id="homeScreen">
+  <div class="app-header">
+    <div class="badge">四年级下册</div>
+    <h1>听写练习</h1>
+    <p>选择课次，开始听写</p>
+  </div>
+  <div class="lesson-list" id="lessonList"></div>
+</div>
+
+<!-- DICTATION -->
+<div class="screen hidden" id="dictScreen">
+  <div class="dict-top">
+    <button class="back-btn-icon" onclick="backToSelect()">←</button>
+    <div class="dict-lesson-name" id="dictLessonName"></div>
+    <div class="dict-placeholder"></div>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-track"><div id="progressFill"></div></div>
+    <div id="wordCountText"></div>
+  </div>
+  <div class="dict-center">
+    <div id="pinyinDisplay"></div>
+    <div id="hintLabel">请书写汉字</div>
+  </div>
+  <div class="timer-wrap">
+    <div class="timer-box">
+      <svg id="timerSvg" width="72" height="72" viewBox="0 0 72 72">
+        <circle id="timerTrack" cx="36" cy="36" r="30" fill="none" stroke-width="5"/>
+        <circle id="timerArc"   cx="36" cy="36" r="30" fill="none" stroke-width="5"
+                stroke-linecap="round"/>
+      </svg>
+      <span class="timer-text" id="timerNum">7</span>
+    </div>
+  </div>
+  <div class="dict-bottom">
+    <div class="nav-row">
+      <button class="nav-btn" id="prevBtn" onclick="prevWord()">上一个</button>
+      <button class="nav-btn" id="nextBtn" onclick="nextWord()">下一个 →</button>
+      <button class="nav-btn" id="endNowBtn" onclick="showEnd()" style="font-size:12px;background:rgba(255,255,255,0.06);color:var(--muted)">结束</button>
+    </div>
+  </div>
+</div>
+
+<!-- END -->
+<div class="screen hidden" id="endScreen">
+  <div class="end-header">
+    <div class="end-icon">✓</div>
+    <h2>本课听写完毕</h2>
+    <p>请核对答案是否正确</p>
+  </div>
+  <div class="word-grid" id="wordGrid"></div>
+  <div class="end-actions">
+    <button class="end-btn" id="restartBtn" onclick="restartLesson()">再听一遍</button>
+    <button class="end-btn" id="backBtn2" onclick="backToSelect()" style="margin-top:10px">返回选课</button>
+  </div>
+</div>
+
+<script>
+const LESSONS = [{"id": 1, "num": "1", "title": "第1课 古诗词三首", "words": [{"word": "梅子", "pinyin": "méi zi"}, {"word": "杏子", "pinyin": "xìng zi"}, {"word": "蛱蝶", "pinyin": "jiá dié"}, {"word": "篱落", "pinyin": "lí luò"}, {"word": "蜻蜓", "pinyin": "qīng tíng"}, {"word": "茅檐", "pinyin": "máo yán"}, {"word": "翁媪", "pinyin": "wēng ǎo"}, {"word": "锄豆", "pinyin": "chú dòu"}, {"word": "莲蓬", "pinyin": "lián péng"}, {"word": "疏疏", "pinyin": "shū shū"}, {"word": "菜花", "pinyin": "cài huā"}, {"word": "树阴", "pinyin": "shù yīn"}, {"word": "溪上", "pinyin": "xī shàng"}, {"word": "无处寻", "pinyin": "wú chǔ xún"}, {"word": "清平乐", "pinyin": "qīng píng lè"}]}, {"id": 2, "num": "2", "title": "第2课 乡下人家", "words": [{"word": "屋檐", "pinyin": "wū yán"}, {"word": "构成", "pinyin": "gòu chéng"}, {"word": "装饰", "pinyin": "zhuāng shì"}, {"word": "蹲守", "pinyin": "dūn shǒu"}, {"word": "芍药", "pinyin": "sháo yào"}, {"word": "鸡冠花", "pinyin": "jī guān huā"}, {"word": "时令", "pinyin": "shí lìng"}, {"word": "顺序", "pinyin": "shùn xù"}, {"word": "朴素", "pinyin": "pǔ sù"}, {"word": "华丽", "pinyin": "huá lì"}, {"word": "独特", "pinyin": "dú tè"}, {"word": "绿荫", "pinyin": "lǜ yīn"}, {"word": "竹笋", "pinyin": "zhú sǔn"}, {"word": "照例", "pinyin": "zhào lì"}, {"word": "率领", "pinyin": "shuài lǐng"}, {"word": "觅食", "pinyin": "mì shí"}, {"word": "耸立", "pinyin": "sǒng lì"}, {"word": "倘若", "pinyin": "tǎng ruò"}, {"word": "附近", "pinyin": "fù jìn"}, {"word": "捣衣", "pinyin": "dǎo yī"}, {"word": "天高地阔", "pinyin": "tiān gāo dì kuò"}, {"word": "描绘", "pinyin": "miáo huì"}, {"word": "和谐", "pinyin": "hé xié"}, {"word": "寄托", "pinyin": "jì tuō"}, {"word": "催眠曲", "pinyin": "cuī mián qǔ"}, {"word": "甜甜蜜蜜", "pinyin": "tián tián mì mì"}]}, {"id": 3, "num": "3", "title": "第3课 天窗", "words": [{"word": "慰藉", "pinyin": "wèi jiè"}, {"word": "扫荡", "pinyin": "sǎo dàng"}, {"word": "威力", "pinyin": "wēi lì"}, {"word": "锐利", "pinyin": "ruì lì"}, {"word": "河滩", "pinyin": "hé tān"}, {"word": "帐子", "pinyin": "zhàng zi"}, {"word": "奇幻", "pinyin": "qí huàn"}, {"word": "夜莺", "pinyin": "yè yīng"}, {"word": "霸气", "pinyin": "bà qì"}, {"word": "猫头鹰", "pinyin": "māo tóu yīng"}, {"word": "真切", "pinyin": "zhēn qiè"}, {"word": "复杂", "pinyin": "fù zá"}, {"word": "卜落卜落", "pinyin": "bo luò bo luò"}, {"word": "瞥", "pinyin": "piē"}, {"word": "掠过", "pinyin": "lüè guò"}]}, {"id": 4, "num": "4", "title": "第4课 三月桃花水", "words": [{"word": "铃铛", "pinyin": "líng dāng"}, {"word": "光芒", "pinyin": "guāng máng"}, {"word": "丝绸", "pinyin": "sī chóu"}, {"word": "映照", "pinyin": "yìng zhào"}, {"word": "舞动", "pinyin": "wǔ dòng"}, {"word": "绮丽", "pinyin": "qǐ lì"}, {"word": "朝霞", "pinyin": "zhāo xiá"}, {"word": "回旋", "pinyin": "huí xuán"}, {"word": "应和", "pinyin": "yìng hè"}, {"word": "纤细", "pinyin": "xiān xì"}, {"word": "谈心", "pinyin": "tán xīn"}, {"word": "叮当", "pinyin": "dīng dāng"}, {"word": "沉醉", "pinyin": "chén zuì"}]}, {"id": 101, "num": "园一", "title": "语文园地一", "words": [{"word": "繁华", "pinyin": "fán huá"}, {"word": "璀璨", "pinyin": "cuǐ càn"}, {"word": "高楼林立", "pinyin": "gāo lóu lín lì"}, {"word": "车水马龙", "pinyin": "chē shuǐ mǎ lóng"}, {"word": "灯火辉煌", "pinyin": "dēng huǒ huī huáng"}, {"word": "肥沃", "pinyin": "féi wò"}, {"word": "静谧", "pinyin": "jìng mì"}, {"word": "炊烟袅袅", "pinyin": "chuī yān niǎo niǎo"}, {"word": "依山傍水", "pinyin": "yī shān bàng shuǐ"}, {"word": "鸡犬相闻", "pinyin": "jī quǎn xiāng wén"}]}, {"id": 5, "num": "5", "title": "第5课 琥珀", "words": [{"word": "翻腾怒吼", "pinyin": "fān téng nù hǒu"}, {"word": "飒飒作响", "pinyin": "sà sà zuò xiǎng"}, {"word": "柔嫩", "pinyin": "róu nèn"}, {"word": "嗡嗡", "pinyin": "wēng wēng"}, {"word": "松脂", "pinyin": "sōng zhī"}, {"word": "掸掸翅膀", "pinyin": "dǎn dǎn chì bǎng"}, {"word": "拂拭", "pinyin": "fú shì"}, {"word": "沾满灰尘", "pinyin": "zhān mǎn huī chén"}, {"word": "美餐", "pinyin": "měi cān"}, {"word": "晌午", "pinyin": "shǎng wǔ"}, {"word": "热辣辣", "pinyin": "rè là là"}, {"word": "渗出", "pinyin": "shèn chū"}, {"word": "黏稠", "pinyin": "nián chóu"}, {"word": "前俯后仰", "pinyin": "qián fǔ hòu yǎng"}, {"word": "挣扎", "pinyin": "zhēng zhá"}, {"word": "一番", "pinyin": "yī fān"}, {"word": "成千上万", "pinyin": "chéng qiān shàng wàn"}, {"word": "埋没", "pinyin": "mái mò"}, {"word": "水漫金山", "pinyin": "shuǐ màn jīn shān"}, {"word": "冲刷", "pinyin": "chōng shuā"}, {"word": "连根拔起", "pinyin": "lián gēn bá qǐ"}, {"word": "断绝", "pinyin": "duàn jué"}, {"word": "腐烂", "pinyin": "fǔ làn"}, {"word": "澎湃", "pinyin": "pēng pài"}, {"word": "波涛", "pinyin": "bō tāo"}, {"word": "赤脚", "pinyin": "chì jiǎo"}, {"word": "推测", "pinyin": "tuī cè"}, {"word": "详细", "pinyin": "xiáng xì"}, {"word": "情形", "pinyin": "qíng xíng"}]}, {"id": 6, "num": "6", "title": "第6课 飞向蓝天的恐龙", "words": [{"word": "迟钝", "pinyin": "chí dùn"}, {"word": "五彩斑斓", "pinyin": "wǔ cǎi bān lán"}, {"word": "漫长", "pinyin": "màn cháng"}, {"word": "凌空", "pinyin": "líng kōng"}, {"word": "翱翔", "pinyin": "áo xiáng"}, {"word": "赫胥黎", "pinyin": "hè xū lí"}, {"word": "骨骼", "pinyin": "gǔ gé"}, {"word": "后裔", "pinyin": "hòu yì"}, {"word": "根据", "pinyin": "gēn jù"}, {"word": "末期", "pinyin": "mò qī"}, {"word": "描绘", "pinyin": "miáo huì"}, {"word": "时空隧道", "pinyin": "shí kōng suì dào"}, {"word": "访问", "pinyin": "fǎng wèn"}, {"word": "繁衍", "pinyin": "fán yǎn"}, {"word": "形态各异", "pinyin": "xíng tài gè yì"}, {"word": "吨位", "pinyin": "dūn wèi"}, {"word": "茹毛饮血", "pinyin": "rú máo yǐn xuè"}, {"word": "脑颅膨大", "pinyin": "nǎo lú péng dà"}, {"word": "行动敏捷", "pinyin": "xíng dòng mǐn jié"}, {"word": "鳞片", "pinyin": "lín piàn"}, {"word": "躲避敌害", "pinyin": "duǒ bì dí hài"}, {"word": "开辟", "pinyin": "kāi pì"}, {"word": "崭新", "pinyin": "zhǎn xīn"}, {"word": "脱离", "pinyin": "tuō lí"}, {"word": "揭示", "pinyin": "jiē shì"}]}, {"id": 7, "num": "7", "title": "第7课 纳米技术就在我们身边", "words": [{"word": "乒乓球", "pinyin": "pīng pāng qiú"}, {"word": "无能为力", "pinyin": "wú néng wéi lì"}, {"word": "拥有", "pinyin": "yōng yǒu"}, {"word": "杀菌", "pinyin": "shā jūn"}, {"word": "除臭", "pinyin": "chú chòu"}, {"word": "功能", "pinyin": "gōng néng"}, {"word": "蔬菜", "pinyin": "shū cài"}, {"word": "碳纳米管", "pinyin": "tàn nà mǐ guǎn"}, {"word": "癌症", "pinyin": "ái zhèng"}, {"word": "死亡率", "pinyin": "sǐ wáng lǜ"}, {"word": "疾病", "pinyin": "jí bìng"}, {"word": "病灶", "pinyin": "bìng zào"}, {"word": "缓释技术", "pinyin": "huǎn shì jì shù"}, {"word": "释放", "pinyin": "shì fàng"}]}, {"id": 8, "num": "8", "title": "第8课 千年梦圆在今朝", "words": [{"word": "遨游", "pinyin": "áo yóu"}, {"word": "嫦娥奔月", "pinyin": "cháng é bēn yuè"}, {"word": "鲲鹏展翅", "pinyin": "kūn péng zhǎn chì"}, {"word": "九天揽月", "pinyin": "jiǔ tiān lǎn yuè"}, {"word": "炎黄子孙", "pinyin": "yán huáng zǐ sūn"}, {"word": "先驱", "pinyin": "xiān qū"}, {"word": "实践", "pinyin": "shí jiàn"}, {"word": "执着", "pinyin": "zhí zhuó"}, {"word": "苍穹", "pinyin": "cāng qióng"}, {"word": "党中央", "pinyin": "dǎng zhōng yāng"}, {"word": "实施", "pinyin": "shí shī"}, {"word": "不懈努力", "pinyin": "bù xiè nǔ lì"}, {"word": "震耳欲聋", "pinyin": "zhèn ěr yù lóng"}, {"word": "宛若", "pinyin": "wǎn ruò"}, {"word": "里程碑", "pinyin": "lǐ chéng bēi"}, {"word": "拍摄", "pinyin": "pāi shè"}]}, {"id": 102, "num": "园二", "title": "语文园地二", "words": [{"word": "海滨", "pinyin": "hǎi bīn"}, {"word": "宾馆", "pinyin": "bīn guǎn"}, {"word": "洁白", "pinyin": "jié bái"}, {"word": "吉利", "pinyin": "jí lì"}, {"word": "减少", "pinyin": "jiǎn shǎo"}, {"word": "咸菜", "pinyin": "xián cài"}, {"word": "挑选", "pinyin": "tiāo xuǎn"}, {"word": "预兆", "pinyin": "yù zhào"}, {"word": "挺拔", "pinyin": "tǐng bá"}, {"word": "宫廷", "pinyin": "gōng tíng"}, {"word": "预习", "pinyin": "yù xí"}, {"word": "赠予", "pinyin": "zèng yǔ"}, {"word": "中间", "pinyin": "zhōng jiān"}, {"word": "肿胀", "pinyin": "zhǒng zhàng"}, {"word": "介绍", "pinyin": "jiè shào"}, {"word": "台阶", "pinyin": "tái jiē"}, {"word": "终止", "pinyin": "zhōng zhǐ"}, {"word": "脚趾", "pinyin": "jiǎo zhǐ"}, {"word": "罗列", "pinyin": "luó liè"}, {"word": "巡逻", "pinyin": "xún luó"}, {"word": "正确", "pinyin": "zhèng què"}, {"word": "政府", "pinyin": "zhèng fǔ"}, {"word": "刘海", "pinyin": "liú hǎi"}, {"word": "浏览", "pinyin": "liú lǎn"}]}, {"id": 9, "num": "9", "title": "第9课 短诗三首", "words": [{"word": "永不漫灭", "pinyin": "yǒng bù màn miè"}, {"word": "藤萝", "pinyin": "téng luó"}, {"word": "波涛", "pinyin": "bō tāo"}, {"word": "繁星", "pinyin": "fán xīng"}, {"word": "膝盖", "pinyin": "xī gài"}, {"word": "思潮", "pinyin": "sī cháo"}, {"word": "漫山遍野", "pinyin": "màn shān biàn yě"}]}, {"id": 10, "num": "10", "title": "第10课 绿", "words": [{"word": "挤压", "pinyin": "jǐ yā"}, {"word": "交叉", "pinyin": "jiāo chā"}, {"word": "墨绿", "pinyin": "mò lǜ"}, {"word": "集中", "pinyin": "jí zhōng"}, {"word": "教练", "pinyin": "jiào liàn"}, {"word": "指挥", "pinyin": "zhǐ huī"}, {"word": "整齐", "pinyin": "zhěng qí"}, {"word": "节拍", "pinyin": "jié pāi"}, {"word": "重叠", "pinyin": "chóng dié"}]}, {"id": 11, "num": "11", "title": "第11课 白桦", "words": [{"word": "绣球", "pinyin": "xiù qiú"}, {"word": "潇洒", "pinyin": "xiāo sǎ"}, {"word": "绽放", "pinyin": "zhàn fàng"}, {"word": "朦胧", "pinyin": "méng lóng"}, {"word": "金晖", "pinyin": "jīn huī"}, {"word": "徜徉", "pinyin": "cháng yáng"}, {"word": "姗姗来迟", "pinyin": "shān shān lái chí"}, {"word": "白雪皑皑", "pinyin": "bái xuě ái ái"}, {"word": "毛茸茸", "pinyin": "máo róng róng"}, {"word": "寂静", "pinyin": "jì jìng"}, {"word": "涂抹", "pinyin": "tú mǒ"}]}, {"id": 12, "num": "12", "title": "第12课 在天晴了的时候", "words": [{"word": "炫耀", "pinyin": "xuàn yào"}, {"word": "尘垢", "pinyin": "chén gòu"}, {"word": "胆怯", "pinyin": "dǎn qiè"}, {"word": "曝晒", "pinyin": "pù shài"}, {"word": "赤脚", "pinyin": "chì jiǎo"}, {"word": "携手", "pinyin": "xié shǒu"}, {"word": "跋山涉水", "pinyin": "bá shān shè shuǐ"}, {"word": "阴霾", "pinyin": "yīn mái"}, {"word": "晕", "pinyin": "yūn"}, {"word": "皱", "pinyin": "zhòu"}, {"word": "智慧", "pinyin": "zhì huì"}, {"word": "装饰", "pinyin": "zhuāng shì"}]}, {"id": 103, "num": "园三", "title": "语文园地三", "words": [{"word": "屈原", "pinyin": "qū yuán"}, {"word": "陶渊明", "pinyin": "táo yuān míng"}, {"word": "孟浩然", "pinyin": "mèng hào rán"}, {"word": "杜甫", "pinyin": "dù fǔ"}, {"word": "韩愈", "pinyin": "hán yù"}, {"word": "刘禹锡", "pinyin": "liú yǔ xī"}, {"word": "范仲淹", "pinyin": "fàn zhòng yān"}, {"word": "龚自珍", "pinyin": "gōng zì zhēn"}, {"word": "一碧万顷", "pinyin": "yī bì wàn qǐng"}, {"word": "娇嫩", "pinyin": "jiāo nèn"}, {"word": "蓬勃", "pinyin": "péng bó"}, {"word": "融冶", "pinyin": "róng yě"}, {"word": "衣袖", "pinyin": "yī xiù"}]}, {"id": 13, "num": "13", "title": "第13课 猫", "words": [{"word": "乖巧", "pinyin": "guāi qiǎo"}, {"word": "无忧无虑", "pinyin": "wú yōu wú lǜ"}, {"word": "贪玩", "pinyin": "tān wán"}, {"word": "尽职", "pinyin": "jìn zhí"}, {"word": "屏息", "pinyin": "bǐng xī"}, {"word": "凝视", "pinyin": "níng shì"}, {"word": "抓痒", "pinyin": "zhuā yǎng"}, {"word": "稿纸", "pinyin": "gǎo zhǐ"}, {"word": "腔调", "pinyin": "qiāng diào"}, {"word": "变化多端", "pinyin": "biàn huà duō duān"}, {"word": "躲藏", "pinyin": "duǒ cáng"}, {"word": "蛇鼠一窝", "pinyin": "shé shǔ yī wō"}, {"word": "稳定", "pinyin": "wěn dìng"}, {"word": "开辟", "pinyin": "kāi pì"}, {"word": "遭殃", "pinyin": "zāo yāng"}, {"word": "花盆", "pinyin": "huā pén"}, {"word": "摔跤", "pinyin": "shuāi jiāo"}, {"word": "呼唤", "pinyin": "hū huàn"}, {"word": "生气勃勃", "pinyin": "shēng qì bó bó"}, {"word": "枝折花落", "pinyin": "zhī zhé huā luò"}, {"word": "彼此", "pinyin": "bǐ cǐ"}, {"word": "磨蹭", "pinyin": "mó cèng"}]}, {"id": 14, "num": "14", "title": "第14课 母鸡", "words": [{"word": "讨厌", "pinyin": "tǎo yàn"}, {"word": "田坝", "pinyin": "tián bà"}, {"word": "疙瘩", "pinyin": "gē da"}, {"word": "忠厚", "pinyin": "zhōng hòu"}, {"word": "毒手", "pinyin": "dú shǒu"}, {"word": "成绩", "pinyin": "chéng jì"}, {"word": "孵化", "pinyin": "fū huà"}, {"word": "凄惨", "pinyin": "qī cǎn"}, {"word": "警戒", "pinyin": "jǐng jiè"}, {"word": "东倒西歪", "pinyin": "dōng dǎo xī wāi"}, {"word": "汤圆", "pinyin": "tāng yuán"}, {"word": "蹲伏", "pinyin": "dūn fú"}, {"word": "一声不哼", "pinyin": "yī shēng bù hēng"}, {"word": "啼叫", "pinyin": "tí jiào"}, {"word": "理由", "pinyin": "lǐ yóu"}, {"word": "嘎嘎", "pinyin": "gā gā"}, {"word": "欺侮", "pinyin": "qī wǔ"}, {"word": "可恶", "pinyin": "kě wù"}, {"word": "一撮儿", "pinyin": "yī zuǒ ér"}, {"word": "小雏鸡", "pinyin": "xiǎo chú jī"}, {"word": "消瘦", "pinyin": "xiāo shòu"}, {"word": "啄食", "pinyin": "zhuó shí"}]}, {"id": 15, "num": "15", "title": "第15课 白鹅", "words": [{"word": "音调", "pinyin": "yīn diào"}, {"word": "郑重", "pinyin": "zhèng zhòng"}, {"word": "叫嚣", "pinyin": "jiào xiāo"}, {"word": "引吭大叫", "pinyin": "yǐn kēng dà jiào"}, {"word": "篱笆", "pinyin": "lí bā"}, {"word": "狂吠", "pinyin": "kuáng fèi"}, {"word": "偏颇", "pinyin": "piān pǒ"}, {"word": "局促", "pinyin": "jú cù"}, {"word": "看守", "pinyin": "kān shǒu"}, {"word": "奢侈", "pinyin": "shē chǐ"}, {"word": "一丝不苟", "pinyin": "yī sī bù gǒu"}, {"word": "堂倌", "pinyin": "táng guān"}, {"word": "侍候", "pinyin": "shì hòu"}, {"word": "窥伺", "pinyin": "kuī sì"}, {"word": "供养", "pinyin": "gòng yǎng"}, {"word": "姿态", "pinyin": "zī tài"}, {"word": "高傲", "pinyin": "gāo ào"}, {"word": "呵斥", "pinyin": "hē chì"}, {"word": "京剧", "pinyin": "jīng jù"}, {"word": "譬如", "pinyin": "pì rú"}, {"word": "倘若", "pinyin": "tǎng ruò"}, {"word": "从容不迫", "pinyin": "cóng róng bù pò"}, {"word": "饭馆", "pinyin": "fàn guǎn"}, {"word": "脾气", "pinyin": "pí qì"}, {"word": "空空如也", "pinyin": "kōng kōng rú yě"}]}, {"id": 104, "num": "园四", "title": "语文园地四", "words": [{"word": "千里马", "pinyin": "qiān lǐ mǎ"}, {"word": "老黄牛", "pinyin": "lǎo huáng niú"}, {"word": "百灵鸟", "pinyin": "bǎi líng niǎo"}, {"word": "领头羊", "pinyin": "lǐng tóu yáng"}, {"word": "小蜜蜂", "pinyin": "xiǎo mì fēng"}, {"word": "纸老虎", "pinyin": "zhǐ lǎo hǔ"}, {"word": "变色龙", "pinyin": "biàn sè lóng"}, {"word": "铁公鸡", "pinyin": "tiě gōng jī"}, {"word": "应声虫", "pinyin": "yìng shēng chóng"}, {"word": "哈巴狗", "pinyin": "hǎ bā gǒu"}]}, {"id": 16, "num": "16", "title": "第16课 海上日出", "words": [{"word": "清净", "pinyin": "qīng jìng"}, {"word": "扩大", "pinyin": "kuò dà"}, {"word": "范围", "pinyin": "fàn wéi"}, {"word": "努力", "pinyin": "nǔ lì"}, {"word": "刹那", "pinyin": "chà nà"}, {"word": "夺目", "pinyin": "duó mù"}, {"word": "分辨", "pinyin": "fēn biàn"}, {"word": "灿烂", "pinyin": "càn làn"}, {"word": "机器", "pinyin": "jī qì"}, {"word": "云霞", "pinyin": "yún xiá"}, {"word": "镶嵌", "pinyin": "xiāng qiàn"}, {"word": "交替", "pinyin": "jiāo tì"}, {"word": "负荷", "pinyin": "fù hè"}]}, {"id": 17, "num": "17", "title": "第17课 记金华的双龙洞", "words": [{"word": "杜鹃", "pinyin": "dù juān"}, {"word": "气势", "pinyin": "qì shì"}, {"word": "聚集", "pinyin": "jù jí"}, {"word": "拥挤", "pinyin": "yōng jǐ"}, {"word": "心情", "pinyin": "xīn qíng"}, {"word": "脚跟", "pinyin": "jiǎo gēn"}, {"word": "移动", "pinyin": "yí dòng"}, {"word": "昏暗", "pinyin": "hūn àn"}, {"word": "挤压", "pinyin": "jǐ yā"}, {"word": "稍微", "pinyin": "shāo wēi"}, {"word": "额角", "pinyin": "é jiǎo"}, {"word": "登陆", "pinyin": "dēng lù"}, {"word": "漆黑", "pinyin": "qī hēi"}, {"word": "宽广", "pinyin": "kuān guǎng"}, {"word": "蜿蜒", "pinyin": "wān yán"}, {"word": "石钟乳", "pinyin": "shí zhōng rǔ"}, {"word": "石笋", "pinyin": "shí sǔn"}, {"word": "观赏", "pinyin": "guān shǎng"}, {"word": "浙江", "pinyin": "zhè jiāng"}, {"word": "突兀", "pinyin": "tū wù"}, {"word": "簇拥", "pinyin": "cù yōng"}, {"word": "臀部", "pinyin": "tún bù"}]}, {"id": 19, "num": "19", "title": "第19课 小英雄雨来", "words": [{"word": "芦花", "pinyin": "lú huā"}, {"word": "发愣", "pinyin": "fā lèng"}, {"word": "铅笔", "pinyin": "qiān bǐ"}, {"word": "脊背", "pinyin": "jǐ bèi"}, {"word": "姥姥", "pinyin": "lǎo lao"}, {"word": "劫难", "pinyin": "jié nàn"}, {"word": "鬼脸", "pinyin": "guǐ liǎn"}, {"word": "戒指", "pinyin": "jiè zhǐ"}, {"word": "试探", "pinyin": "shì tàn"}, {"word": "尸首", "pinyin": "shī shǒu"}, {"word": "防备", "pinyin": "fáng bèi"}, {"word": "慌忙", "pinyin": "huāng máng"}, {"word": "苇絮", "pinyin": "wěi xù"}, {"word": "黝黑", "pinyin": "yǒu hēi"}, {"word": "笤帚", "pinyin": "tiáo zhǒu"}, {"word": "泥鳅", "pinyin": "ní qiū"}, {"word": "起码", "pinyin": "qǐ mǎ"}, {"word": "裤褂", "pinyin": "kù guà"}, {"word": "手榴弹", "pinyin": "shǒu liú dàn"}, {"word": "舅舅", "pinyin": "jiù jiù"}, {"word": "哐啷", "pinyin": "kuāng lāng"}, {"word": "门槛", "pinyin": "mén kǎn"}, {"word": "捆绑", "pinyin": "kǔn bǎng"}, {"word": "撒谎", "pinyin": "sā huǎng"}, {"word": "嘟囔", "pinyin": "dū nāng"}, {"word": "吆喝", "pinyin": "yāo hē"}, {"word": "漩涡", "pinyin": "xuán wō"}, {"word": "趔趄", "pinyin": "liè qiè"}]}, {"id": 20, "num": "20", "title": "第20课 我们家的男子汉", "words": [{"word": "安徽", "pinyin": "ān huī"}, {"word": "谜语", "pinyin": "mí yǔ"}, {"word": "嘴唇", "pinyin": "zuǐ chún"}, {"word": "和尚", "pinyin": "hé shàng"}, {"word": "搅拌", "pinyin": "jiǎo bàn"}, {"word": "倔强", "pinyin": "jué jiàng"}, {"word": "嘱咐", "pinyin": "zhǔ fù"}, {"word": "沮丧", "pinyin": "jǔ sàng"}, {"word": "一声不吭", "pinyin": "yī shēng bù kēng"}, {"word": "仪式", "pinyin": "yí shì"}, {"word": "妨碍", "pinyin": "fáng ài"}, {"word": "保姆", "pinyin": "bǎo mǔ"}, {"word": "恍惚", "pinyin": "huǎng hū"}, {"word": "嘹亮", "pinyin": "liáo liàng"}, {"word": "拘束", "pinyin": "jū shù"}, {"word": "轮廓", "pinyin": "lún kuò"}, {"word": "上蹿下跳", "pinyin": "shàng cuān xià tiào"}]}, {"id": 21, "num": "21", "title": "第21课 芦花鞋", "words": [{"word": "揉搓", "pinyin": "róu cuō"}, {"word": "葵花", "pinyin": "kuí huā"}, {"word": "倾覆", "pinyin": "qīng fù"}, {"word": "抚摸", "pinyin": "fǔ mō"}, {"word": "祈求", "pinyin": "qí qiú"}, {"word": "遗憾", "pinyin": "yí hàn"}, {"word": "污迹", "pinyin": "wū jì"}, {"word": "雪屑", "pinyin": "xuě xiè"}, {"word": "码头", "pinyin": "mǎ tóu"}, {"word": "咯吱咯吱", "pinyin": "gē zhī gē zhī"}, {"word": "啧啧称奇", "pinyin": "zé zé chēng qí"}]}, {"id": 106, "num": "园六", "title": "语文园地六", "words": [{"word": "囊萤夜读", "pinyin": "náng yíng yè dú"}, {"word": "悬梁刺股", "pinyin": "xuán liáng cì gǔ"}, {"word": "凿壁偷光", "pinyin": "záo bì tōu guāng"}, {"word": "铁杵成针", "pinyin": "tiě chǔ chéng zhēn"}, {"word": "程门立雪", "pinyin": "chéng mén lì xuě"}, {"word": "手不释卷", "pinyin": "shǒu bù shì juàn"}]}, {"id": 22, "num": "22", "title": "第22课 古诗三首", "words": [{"word": "芙蓉楼", "pinyin": "fú róng lóu"}, {"word": "寒雨", "pinyin": "hán yǔ"}, {"word": "平明", "pinyin": "píng míng"}, {"word": "楚山", "pinyin": "chǔ shān"}, {"word": "冰心", "pinyin": "bīng xīn"}, {"word": "玉壶", "pinyin": "yù hú"}, {"word": "洛阳", "pinyin": "luò yáng"}, {"word": "单于", "pinyin": "chán yú"}, {"word": "遁逃", "pinyin": "dùn táo"}, {"word": "轻骑", "pinyin": "qīng qí"}, {"word": "弓刀", "pinyin": "gōng dāo"}, {"word": "墨梅", "pinyin": "mò méi"}, {"word": "洗砚", "pinyin": "xǐ yàn"}, {"word": "淡墨", "pinyin": "dàn mò"}, {"word": "乾坤", "pinyin": "qián kūn"}]}, {"id": 23, "num": "23", "title": "第23课 黄继光", "words": [{"word": "战役", "pinyin": "zhàn yì"}, {"word": "屡次", "pinyin": "lǚ cì"}, {"word": "摧毁", "pinyin": "cuī huǐ"}, {"word": "匍匐", "pinyin": "pú fú"}, {"word": "牺牲", "pinyin": "xī shēng"}, {"word": "冰雹", "pinyin": "bīng báo"}, {"word": "晕倒", "pinyin": "yūn dǎo"}, {"word": "胸膛", "pinyin": "xiōng táng"}, {"word": "持续", "pinyin": "chí xù"}, {"word": "占领", "pinyin": "zhàn lǐng"}, {"word": "轰鸣", "pinyin": "hōng míng"}, {"word": "射击", "pinyin": "shè jī"}, {"word": "突击", "pinyin": "tū jī"}, {"word": "枪弹", "pinyin": "qiāng dàn"}, {"word": "愤怒", "pinyin": "fèn nù"}, {"word": "光荣", "pinyin": "guāng róng"}, {"word": "艰巨", "pinyin": "jiān jù"}, {"word": "炮弹", "pinyin": "pào dàn"}, {"word": "爆炸", "pinyin": "bào zhà"}, {"word": "顽强", "pinyin": "wán qiáng"}, {"word": "启明星", "pinyin": "qǐ míng xīng"}, {"word": "参谋长", "pinyin": "cān móu zhǎng"}, {"word": "惊天动地", "pinyin": "jīng tiān dòng dì"}]}, {"id": 24, "num": "24", "title": "第24课 诺曼底号遇难记", "words": [{"word": "弥漫", "pinyin": "mí màn"}, {"word": "山脉", "pinyin": "shān mài"}, {"word": "估计", "pinyin": "gū jì"}, {"word": "船桅", "pinyin": "chuán wéi"}, {"word": "幽灵", "pinyin": "yōu líng"}, {"word": "翘首", "pinyin": "qiáo shǒu"}, {"word": "船舷", "pinyin": "chuán xián"}, {"word": "剖开", "pinyin": "pōu kāi"}, {"word": "哭泣", "pinyin": "kū qì"}, {"word": "维持", "pinyin": "wéi chí"}, {"word": "猝然", "pinyin": "cù rán"}, {"word": "酣睡", "pinyin": "hān shuì"}, {"word": "蓦地", "pinyin": "mò dì"}, {"word": "嘈杂", "pinyin": "cáo zá"}, {"word": "肇祸", "pinyin": "zhào huò"}, {"word": "可鄙", "pinyin": "kě bǐ"}, {"word": "岗位", "pinyin": "gǎng wèi"}, {"word": "主宰", "pinyin": "zhǔ zǎi"}, {"word": "调遣", "pinyin": "diào qiǎn"}, {"word": "穿梭", "pinyin": "chuān suō"}, {"word": "须臾", "pinyin": "xū yú"}, {"word": "履行", "pinyin": "lǚ xíng"}, {"word": "距离", "pinyin": "jù lí"}, {"word": "行驶", "pinyin": "xíng shǐ"}, {"word": "起航", "pinyin": "qǐ háng"}, {"word": "秩序", "pinyin": "zhì xù"}, {"word": "考虑", "pinyin": "kǎo lǜ"}, {"word": "践行", "pinyin": "jiàn xíng"}, {"word": "救生艇", "pinyin": "jiù shēng tǐng"}, {"word": "你推我搡", "pinyin": "nǐ tuī wǒ sǎng"}, {"word": "井然有序", "pinyin": "jǐng rán yǒu xù"}, {"word": "小心翼翼", "pinyin": "xiǎo xīn yì yì"}, {"word": "失魂落魄", "pinyin": "shī hún luò pò"}, {"word": "葬身鱼腹", "pinyin": "zàng shēn yú fù"}, {"word": "汹涌湍急", "pinyin": "xiōng yǒng tuān jí"}]}, {"id": 25, "num": "25", "title": "第25课 挑山工", "words": [{"word": "泰山", "pinyin": "tài shān"}, {"word": "平衡", "pinyin": "píng héng"}, {"word": "矮小", "pinyin": "ǎi xiǎo"}, {"word": "敞开", "pinyin": "chǎng kāi"}, {"word": "褂子", "pinyin": "guà zi"}, {"word": "拴住", "pinyin": "shuān zhù"}, {"word": "歇脚", "pinyin": "xiē jiǎo"}, {"word": "拘束", "pinyin": "jū shù"}, {"word": "耽误", "pinyin": "dān wù"}, {"word": "包蕴", "pinyin": "bāo yùn"}, {"word": "喧闹", "pinyin": "xuān nào"}, {"word": "饱览", "pinyin": "bǎo lǎn"}, {"word": "舒展", "pinyin": "shū zhǎn"}, {"word": "攀登", "pinyin": "pān dēng"}, {"word": "青竹杖", "pinyin": "qīng zhú zhàng"}, {"word": "沉甸甸", "pinyin": "chén diàn diàn"}, {"word": "黑黝黝", "pinyin": "hēi yǒu yǒu"}, {"word": "腾云驾雾", "pinyin": "téng yún jià wù"}, {"word": "心悦诚服", "pinyin": "xīn yuè chéng fú"}, {"word": "意味深长", "pinyin": "yì wèi shēn cháng"}]}, {"id": 107, "num": "园七", "title": "语文园地七", "words": [{"word": "和蔼", "pinyin": "hé ǎi"}, {"word": "慷慨", "pinyin": "kāng kǎi"}, {"word": "贤惠", "pinyin": "xián huì"}, {"word": "悲戚", "pinyin": "bēi qī"}, {"word": "临危不惧", "pinyin": "lín wēi bù jù"}, {"word": "彬彬有礼", "pinyin": "bīn bīn yǒu lǐ"}, {"word": "焦躁不安", "pinyin": "jiāo zào bù ān"}, {"word": "心急如焚", "pinyin": "xīn jí rú fén"}]}, {"id": 26, "num": "26", "title": "第26课 宝葫芦的秘密", "words": [{"word": "介绍", "pinyin": "jiè shào"}, {"word": "永葆青春", "pinyin": "yǒng bǎo qīng chūn"}, {"word": "声明", "pinyin": "shēng míng"}, {"word": "妖怪", "pinyin": "yāo guài"}, {"word": "规矩", "pinyin": "guī jǔ"}, {"word": "乖巧", "pinyin": "guāi qiǎo"}, {"word": "撵走", "pinyin": "niǎn zǒu"}, {"word": "脚丫", "pinyin": "jiǎo yā"}, {"word": "胳膊", "pinyin": "gē bó"}, {"word": "拖拽", "pinyin": "tuō zhuāi"}, {"word": "劈面", "pinyin": "pī miàn"}, {"word": "龙宫", "pinyin": "lóng gōng"}, {"word": "向日葵", "pinyin": "xiàng rì kuí"}, {"word": "瘦长", "pinyin": "shòu cháng"}, {"word": "滚烫", "pinyin": "gǔn tàng"}, {"word": "溜开", "pinyin": "liū kāi"}, {"word": "挖掘", "pinyin": "wā jué"}, {"word": "舔食", "pinyin": "tiǎn shí"}, {"word": "罢工", "pinyin": "bà gōng"}]}, {"id": 27, "num": "27", "title": "第27课 巨人的花园", "words": [{"word": "柔嫩", "pinyin": "róu nèn"}, {"word": "丰硕", "pinyin": "fēng shuò"}, {"word": "叱责", "pinyin": "chì zé"}, {"word": "允许", "pinyin": "yǔn xǔ"}, {"word": "堆砌", "pinyin": "duī qì"}, {"word": "禁止", "pinyin": "jìn zhǐ"}, {"word": "踪迹", "pinyin": "zōng jì"}, {"word": "覆盖", "pinyin": "fù gài"}, {"word": "呼啸", "pinyin": "hū xiào"}, {"word": "始终", "pinyin": "shǐ zhōng"}, {"word": "吼叫", "pinyin": "hǒu jiào"}, {"word": "千丝万缕", "pinyin": "qiān sī wàn lǚ"}, {"word": "自私", "pinyin": "zì sī"}, {"word": "后悔", "pinyin": "hòu huǐ"}, {"word": "举动", "pinyin": "jǔ dòng"}, {"word": "搂抱", "pinyin": "lǒu bào"}, {"word": "脸颊", "pinyin": "liǎn jiá"}, {"word": "凶狠", "pinyin": "xiōng hěn"}, {"word": "拆除", "pinyin": "chāi chú"}, {"word": "懂得", "pinyin": "dǒng de"}, {"word": "布告牌", "pinyin": "bù gào pái"}, {"word": "叫嚷", "pinyin": "jiào rǎng"}, {"word": "包裹", "pinyin": "bāo guǒ"}, {"word": "冰雹", "pinyin": "bīng báo"}, {"word": "紧挨", "pinyin": "jǐn āi"}]}, {"id": 28, "num": "28", "title": "第28课 海的女儿", "words": [{"word": "矢车菊", "pinyin": "shǐ chē jú"}, {"word": "宫殿", "pinyin": "gōng diàn"}, {"word": "珊瑚", "pinyin": "shān hú"}, {"word": "蚌壳", "pinyin": "bàng ké"}, {"word": "皇冠", "pinyin": "huáng guān"}, {"word": "牡蛎", "pinyin": "mǔ lì"}, {"word": "抚摸", "pinyin": "fǔ mō"}, {"word": "硫磺", "pinyin": "liú huáng"}, {"word": "瞥见", "pinyin": "piē jiàn"}, {"word": "花萼", "pinyin": "huā è"}, {"word": "鲸鱼", "pinyin": "jīng yú"}, {"word": "亲昵", "pinyin": "qīn nì"}, {"word": "恰巧", "pinyin": "qià qiǎo"}]}, {"id": 108, "num": "园八", "title": "语文园地八", "words": [{"word": "少年不知勤学苦", "pinyin": "shào nián bù zhī qín xué kǔ"}, {"word": "老来方知读书迟", "pinyin": "lǎo lái fāng zhī dú shū chí"}, {"word": "一日读书一日功", "pinyin": "yī rì dú shū yī rì gōng"}, {"word": "一日不读十日空", "pinyin": "yī rì bù dú shí rì kōng"}, {"word": "书山有路勤为径", "pinyin": "shū shān yǒu lù qín wèi jìng"}, {"word": "学海无涯苦作舟", "pinyin": "xué hǎi wú yá kǔ zuò zhōu"}]}];
+const DURATION = 7000;
+const ARC = 188.5; // 2π×30
+
+let currentLesson = null;
+let currentIndex = 0;
+let autoTimer = null;
+let tickTimer = null;
+let tickStart = 0;
+
+// ── screen ──────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => {
+    if (s.id === id) { s.classList.remove('hidden','hidden-left'); }
+    else {
+      s.classList.remove('hidden','hidden-left');
+      s.classList.add(id === 'homeScreen' ? 'hidden-left' : 'hidden');
+    }
+  });
+}
+
+// ── home ────────────────────────────────────────────────────
+(function initHome() {
+  const c = document.getElementById('lessonList');
+  LESSONS.forEach(lesson => {
+    const div = document.createElement('div');
+    const isYuandi = typeof lesson.num === 'string' && lesson.num.startsWith('园');
+    div.className = 'lesson-item' + (isYuandi ? ' yuandi-item' : '');
+    const badgeStyle = isYuandi ? 'style="background:rgba(100,200,140,0.18);color:#5ec98a;font-size:11px;"' : '';
+    const displayName = lesson.title.replace(/^第\d+课\s*/, '');
+    div.innerHTML =
+      '<div class="lesson-num" ' + badgeStyle + '>' + lesson.num + '</div>' +
+      '<div class="lesson-info">' +
+        '<div class="lesson-name">' + displayName + '</div>' +
+        '<div class="lesson-count">' + lesson.words.length + ' 个词语</div>' +
+      '</div>' +
+      '<div class="lesson-arrow">›</div>';
+    div.onclick = () => startLesson(lesson);
+    c.appendChild(div);
+  });
+})();
+
+// ── dictation ───────────────────────────────────────────────
+function startLesson(lesson) {
+  currentLesson = lesson;
+  currentIndex = 0;
+  document.getElementById('dictLessonName').textContent = lesson.title;
+  showScreen('dictScreen');
+  showWord();
+}
+
+function showWord() {
+  clearTimers();
+  if (currentIndex >= currentLesson.words.length) { showEnd(); return; }
+  const item = currentLesson.words[currentIndex];
+  const total = currentLesson.words.length;
+
+  // progress
+  document.getElementById('progressFill').style.width =
+    (currentIndex / total * 100) + '%';
+  document.getElementById('wordCountText').textContent =
+    '第 ' + (currentIndex + 1) + ' 个 / 共 ' + total + ' 个';
+
+  // pinyin flash
+  const pd = document.getElementById('pinyinDisplay');
+  pd.style.opacity = '0';
+  setTimeout(() => {
+    pd.textContent = item.pinyin;
+    pd.style.opacity = '1';
+  }, 100);
+
+  document.getElementById('prevBtn').disabled = currentIndex === 0;
+  speak(item.word);
+  startCountdown();
+}
+
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'zh-CN'; u.rate = 0.82; u.pitch = 1.0;
+  // speak twice with gap
+  speechSynthesis.speak(u);
+  u.onend = () => {
+    setTimeout(() => {
+      const u2 = new SpeechSynthesisUtterance(text);
+      u2.lang = 'zh-CN'; u2.rate = 0.82;
+      speechSynthesis.speak(u2);
+    }, 800);
+  };
+}
+
+function startCountdown() {
+  const arc = document.getElementById('timerArc');
+  const num = document.getElementById('timerNum');
+  arc.style.transition = 'none';
+  arc.style.strokeDashoffset = '0';
+  arc.getBoundingClientRect();
+  arc.style.transition = 'stroke-dashoffset ' + (DURATION/1000) + 's linear';
+  arc.style.strokeDashoffset = String(ARC);
+
+  tickStart = Date.now();
+  function tick() {
+    const elapsed = Date.now() - tickStart;
+    const remaining = Math.max(0, Math.ceil((DURATION - elapsed) / 1000));
+    num.textContent = remaining;
+    if (elapsed < DURATION) tickTimer = setTimeout(tick, 200);
+  }
+  tick();
+  autoTimer = setTimeout(() => { currentIndex++; showWord(); }, DURATION);
+}
+
+function clearTimers() {
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+  if (tickTimer) { clearTimeout(tickTimer); tickTimer = null; }
+}
+
+function nextWord() { clearTimers(); currentIndex++; showWord(); }
+function prevWord() { clearTimers(); if (currentIndex > 0) currentIndex--; showWord(); }
+
+// ── end ─────────────────────────────────────────────────────
+function showEnd() {
+  clearTimers();
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  // fill progress to 100%
+  document.getElementById('progressFill').style.width = '100%';
+
+  showScreen('endScreen');
+  const grid = document.getElementById('wordGrid');
+  grid.innerHTML = '';
+  currentLesson.words.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'word-card';
+    card.innerHTML =
+      '<div class="pinyin-small">' + item.pinyin + '</div>' +
+      '<div class="char">' + item.word + '</div>';
+    grid.appendChild(card);
+  });
+}
+
+function restartLesson() { startLesson(currentLesson); }
+function backToSelect() {
+  clearTimers();
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  showScreen('homeScreen');
+}
+
+// ── PWA service worker ───────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
